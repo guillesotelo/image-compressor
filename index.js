@@ -13,9 +13,6 @@ const maxHeight = 1500
 const maxSize = 500000
 let compressedFiles = 0
 
-console.log('process.argv[1]', process.argv[1])
-console.log('process.argv[2]', process.argv[2])
-
 sharp.cache(false) // Disable caching to ensure the global quality setting takes effect
 sharp.concurrency(1) // Set concurrency to 1 for consistent quality across multiple operations
 
@@ -42,53 +39,71 @@ async function processAndCompressImage(inputPath, outputPath) {
             .then(({ data, info }) => {
                 // Check if the image is within the size limit
                 fs.writeFileSync(outputPath, data)
-                console.log(`Compressed: ${inputPath}`)
-            });
+                compressedFiles++
+            })
     } catch (err) {
-        console.error(`Error compressing: ${inputPath}`, err);
+        console.error(`Error compressing: ${inputPath}`, err)
     }
 }
 
 
 // Function to read and process files
 function processFilesInFolder(folderPath) {
-    try {
-        const files = fs.readdirSync(folderPath)
+    return new Promise((resolve, reject) => {
+        try {
+            const files = fs.readdirSync(folderPath)
+            const promises = []
 
-        files.forEach((file) => {
-            const filePath = path.join(folderPath, file)
-            const stats = fs.statSync(filePath)
+            files.forEach((file) => {
+                const filePath = path.join(folderPath, file)
+                const stats = fs.statSync(filePath)
 
-            if (stats.isDirectory()) {
-                // If it's a directory, recursively process its contents
-                const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
-                fs.mkdirSync(newDestinationFolder, { recursive: true })
-                processFilesInFolder(filePath)
-            } else {
-                // If it's a file, you can check if it's an image and compress it
-                if (['.jpg', '.jpeg', '.png', '.gif'].includes(path.extname(file).toLowerCase())) {
-                    // Create the corresponding subfolder structure in the destination folder
+                if (stats.isDirectory()) {
+                    // If it's a directory, recursively process its contents
                     const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
                     fs.mkdirSync(newDestinationFolder, { recursive: true })
-
-                    // Construct the destination file path
-                    const destinationFilePath = path.join(newDestinationFolder, file)
-
-                    // Process and compress the image
-                    processAndCompressImage(filePath, destinationFilePath)
+                    promises.push(processFilesInFolder(filePath))
                 } else {
-                    // If it's not an image, simply copy it to the destination folder
-                    const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
-                    fs.mkdirSync(newDestinationFolder, { recursive: true })
-                    fs.copyFileSync(filePath, path.join(newDestinationFolder, file))
+                    // If it's a file, you can check if it's an image and compress it
+                    if (['.jpg', '.jpeg', '.png', '.gif'].includes(path.extname(file).toLowerCase())) {
+                        // Create the corresponding subfolder structure in the destination folder
+                        const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
+                        fs.mkdirSync(newDestinationFolder, { recursive: true })
+
+                        // Construct the destination file path
+                        const destinationFilePath = path.join(newDestinationFolder, file)
+
+                        // Process and compress the image
+                        promises.push(processAndCompressImage(filePath, destinationFilePath))
+                    } else {
+                        // If it's not an image, simply copy it to the destination folder
+                        const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
+                        fs.mkdirSync(newDestinationFolder, { recursive: true })
+                        fs.copyFileSync(filePath, path.join(newDestinationFolder, file))
+                    }
                 }
-            }
-        })
-    } catch (err) {
-        console.log('An error occurred while running the conversor', err)
-    }
+            })
+
+            // Wait for all promises to resolve before completing this operation
+            Promise.all(promises)
+                .then(() => {
+                    resolve()
+                })
+                .catch((err) => {
+                    reject(err)
+                })
+        } catch (err) {
+            reject(err)
+        }
+    })
 }
 
 // Start processing files from the source folder
+console.log('Reading source and compressing...')
 processFilesInFolder(sourceFolder)
-console.log(`Compressed ${compressedFiles} files.`)
+    .then(() => {
+        console.log(`Compressed ${compressedFiles} files.`)
+    })
+    .catch((err) => {
+        console.error('An error occurred while running the converter', err)
+    })
