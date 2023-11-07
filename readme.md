@@ -19,3 +19,9 @@ If you want to use a specific percentage of compression for images, pass it as a
 # Example with 60% of compression
 node index path_to_source path_to_destination 60
 ```
+
+To compress videos, use the flag `-v`:
+
+```bash
+node index path_to_source path_to_destination -v
+```
