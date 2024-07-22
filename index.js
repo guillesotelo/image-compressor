@@ -7,7 +7,7 @@ ffmpeg.setFfmpegPath(ffmpegPath)
 const pLimit = require('p-limit')
 
 if (!process.argv[2] || !process.argv[3]) return console.log('Please enter source and destination folder paths\nUse the syntax: node index /source/path /destination/path')
-if (process.argv[4] && process.argv[4] < 1 || process.argv[4] < 100) return console.log('Please enter a quality between 1 and 100')
+if (process.argv[4] && process.argv[4] < 1 || process.argv[4] > 100) return console.log('Please enter a quality between 1 and 100')
 
 const sourceFolder = process.argv[2]
 const destinationFolder = process.argv[3]
@@ -101,8 +101,8 @@ function processFilesInFolder(folderPath) {
                         fs.mkdirSync(newDestinationFolder, { recursive: true })
                         fs.copyFileSync(filePath, path.join(newDestinationFolder, file))
                     }
+                    console.log(`Processing files [${i + 1}/${files.length - 1}]`)
                 }
-                console.log(`Processing [${i + 1}/${files.length - 1}]`)
             })
 
             Promise.all(promises)

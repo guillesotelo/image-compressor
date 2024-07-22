@@ -23,5 +23,5 @@ node index path_to_source path_to_destination 60
 To compress videos, use the flag `-v`:
 
 ```bash
-node index path_to_source path_to_destination -v
+node index path_to_source path_to_destination --v
 ```
