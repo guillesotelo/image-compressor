@@ -126,7 +126,7 @@ function processFilesInFolder(folderPath) {
                 if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
                     promises.push(limit(() => compressImage(filePath, outputPath)))
                 }
-                else if (['.mp4', '.avi', '.mkv'].includes(ext) && compressVideoFlag) {
+                else if (['.mp4', '.avi', '.mkv', '.mov'].includes(ext) && compressVideoFlag) {
                     promises.push(limit(() => compressVideo(filePath, outputPath)))
                 }
                 else {
