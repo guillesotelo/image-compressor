@@ -6,100 +6,70 @@ const ffmpeg = require('fluent-ffmpeg')
 ffmpeg.setFfmpegPath(ffmpegPath)
 const pLimit = require('p-limit')
 
-/* =======================
-   ARGUMENTS & VALIDATION
-   ======================= */
-
-if (!process.argv[2] || !process.argv[3]) {
-    console.log('Please enter source and destination folder paths')
-    console.log('Usage: node index /source/path /destination/path [quality] [--v]')
-    process.exit(1)
-}
-
-if (process.argv[4] && (process.argv[4] < 1 || process.argv[4] > 100)) {
-    console.log('Please enter a quality between 1 and 100')
-    process.exit(1)
-}
+if (!process.argv[2] || !process.argv[3]) return console.log('Please enter source and destination folder paths\nUse the syntax: node index /source/path /destination/path')
+if (process.argv[4] && process.argv[4] < 1 || process.argv[4] > 100) return console.log('Please enter a quality between 1 and 100')
 
 const sourceFolder = process.argv[2]
 const destinationFolder = process.argv[3]
-const globalQuality = Number(process.argv[4]) || 80
+const globalQuality = process.argv[4] || 80
 const compressVideoFlag = process.argv[5] === '--v'
-
-/* =======================
-   IMAGE / VIDEO SETTINGS
-   ======================= */
-
-const maxWidth = 3000
-const maxHeight = 1500
-const maxSize = 500000 // bytes
-const limit = pLimit(5)
-
+const maxWidth = 1000
+const maxHeight = 1000
+const maxSize = 100000 // 50000
+const limit = pLimit(5) // Limit number of concurrent processes
+const videoBitRate = '2000k'
+const audioBitRate = '128k'
 let compressedFiles = 0
 let errors = 0
 
 sharp.cache(false)
 sharp.concurrency(1)
 
-/* Apply quality globally */
 sharp.queue.on('task', (info) => {
-    if (['jpeg', 'png', 'webp', 'gif'].includes(info.format)) {
+    if (info.format === 'jpeg' || info.format === 'png' || info.format === 'webp' || info.format === 'gif') {
         info.options.quality = globalQuality
     }
 })
 
-/* =======================
-   IMAGE COMPRESSION
-   ======================= */
-
 async function compressImage(inputPath, outputPath) {
     try {
-        const { data } = await sharp(inputPath, { failOn: 'truncated' })
-            .rotate() // ✅ EXIF-aware: rotates ONLY if needed
+        await sharp(inputPath, { failOn: 'truncated' })
             .resize({
                 width: maxWidth,
                 height: maxHeight,
                 fit: 'inside',
                 withoutEnlargement: true
             })
-            .withMetadata() // ✅ preserve EXIF (date, GPS, camera, etc.)
             .toBuffer({ resolveWithObject: true, size: maxSize })
-
-        fs.writeFileSync(outputPath, data)
-        compressedFiles++
+            .then(({ data, info }) => {
+                fs.writeFileSync(outputPath, data)
+                // console.log(`Compressed: ${inputPath}`)
+                compressedFiles++
+            })
     } catch (err) {
         errors++
-        console.error(`Error compressing image: ${inputPath}`, err.message)
+        console.error(`Error compressing: ${inputPath}`, err)
     }
 }
 
-/* =======================
-   VIDEO COMPRESSION
-   ======================= */
-
-function compressVideo(inputPath, outputPath) {
+async function compressVideo(inputPath, outputPath) {
     return new Promise((resolve, reject) => {
         try {
             ffmpeg(inputPath)
-                .videoBitrate('500k')
-                .audioBitrate('128k')
-                .on('end', resolve)
-                .on('error', (err) => {
-                    errors++
-                    console.error(`Error compressing video: ${inputPath}`, err.message)
-                    reject(err)
+                .videoBitrate(videoBitRate)
+                .audioBitrate(audioBitRate)
+                .on('end', () => {
+                    // console.log(`Compressed video: ${inputPath}`)
+                    resolve()
                 })
                 .save(outputPath)
         } catch (error) {
             errors++
+            console.error(`Error compressing video: ${inputPath}`, error)
             reject(error)
         }
     })
 }
-
-/* =======================
-   RECURSIVE FILE WALK
-   ======================= */
 
 function processFilesInFolder(folderPath) {
     return new Promise((resolve, reject) => {
@@ -111,50 +81,51 @@ function processFilesInFolder(folderPath) {
                 const filePath = path.join(folderPath, file)
                 const stats = fs.statSync(filePath)
 
-                const relativePath = path.relative(sourceFolder, folderPath)
-                const targetFolder = path.join(destinationFolder, relativePath)
-                fs.mkdirSync(targetFolder, { recursive: true })
-
                 if (stats.isDirectory()) {
+                    const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
+                    fs.mkdirSync(newDestinationFolder, { recursive: true })
                     promises.push(processFilesInFolder(filePath))
-                    return
-                }
+                } else {
+                    const extname = path.extname(file).toLowerCase()
 
-                const ext = path.extname(file).toLowerCase()
-                const outputPath = path.join(targetFolder, file)
-
-                if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
-                    promises.push(limit(() => compressImage(filePath, outputPath)))
+                    if (['.jpg', '.jpeg', '.png', '.gif'].includes(extname)) {
+                        const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
+                        fs.mkdirSync(newDestinationFolder, { recursive: true })
+                        const destinationFilePath = path.join(newDestinationFolder, file)
+                        promises.push(limit(() => compressImage(filePath, destinationFilePath)))
+                    } else if (['.mp4', '.avi', '.mkv', '.mov'].includes(extname) && compressVideoFlag) {
+                        const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
+                        fs.mkdirSync(newDestinationFolder, { recursive: true })
+                        const destinationFilePath = path.join(newDestinationFolder, file)
+                        promises.push(limit(() => compressVideo(filePath, destinationFilePath)))
+                    } else {
+                        const newDestinationFolder = path.join(destinationFolder, path.relative(sourceFolder, folderPath))
+                        fs.mkdirSync(newDestinationFolder, { recursive: true })
+                        fs.copyFileSync(filePath, path.join(newDestinationFolder, file))
+                    }
+                    console.log(`Processing files [${i + 1}/${files.length - 1}]`)
                 }
-                else if (['.mp4', '.avi', '.mkv', '.mov'].includes(ext) && compressVideoFlag) {
-                    promises.push(limit(() => compressVideo(filePath, outputPath)))
-                }
-                else {
-                    fs.copyFileSync(filePath, outputPath)
-                }
-
-                console.log(`Processing [${i + 1}/${files.length}]`)
             })
 
-            Promise.all(promises).then(resolve).catch(reject)
+            Promise.all(promises)
+                .then(() => {
+                    resolve()
+                })
+                .catch((err) => {
+                    reject(err)
+                })
         } catch (err) {
+            console.error('An error occurred while converting the files', err)
             reject(err)
         }
     })
 }
 
-/* =======================
-   START
-   ======================= */
-
 console.log('Reading source and compressing...')
-
 processFilesInFolder(sourceFolder)
     .then(() => {
-        console.log(`\nDone.`)
-        console.log(`Compressed images: ${compressedFiles}`)
-        console.log(`Errors: ${errors}`)
+        console.log(`Compressed ${compressedFiles} files.`)
     })
     .catch((err) => {
-        console.error('Fatal error:', err)
+        console.error('An error occurred while converting the files', err)
     })
