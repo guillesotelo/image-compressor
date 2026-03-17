@@ -34,6 +34,7 @@ sharp.queue.on('task', (info) => {
 async function compressImage(inputPath, outputPath) {
     try {
         await sharp(inputPath, { failOn: 'truncated' })
+            .rotate() // avoids EXIF rotation data overwrites
             .resize({
                 width: maxWidth,
                 height: maxHeight,
