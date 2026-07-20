@@ -7,21 +7,31 @@ For videos, the video bitrate is 500k and audio is 128k.
 
 ## Run conversion
 
+### Python engine
+
 Start the conversion process by running: 
 
 ```bash
-node index path_to_source path_to_destination
+python3 run_compression_v2.py path/to/source --video-quality 26 --photo-quality 85
+```
+
+### JavaScript engine
+
+Start the conversion process by running: 
+
+```bash
+node run_compression_v1.js path/to/source path/to/destination
 ```
 
 If you want to use a specific percentage of compression for images, pass it as a third argument:
 
 ```bash
 # Example with 60% of compression
-node index path_to_source path_to_destination 60
+node run_compression_v1.js path/to/source path/to/destination 60
 ```
 
 To compress videos, use the flag `-v`:
 
 ```bash
-node index path_to_source path_to_destination 80 --v
+node run_compression_v1.js path/to/source path/to/destination 80 --v
 ```
