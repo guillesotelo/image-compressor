@@ -44,6 +44,8 @@ Output: a sibling folder next to the input, e.g.
   /Documents/DCIM  ->  /Documents/DCIM_compressed
 """
 
+from __future__ import annotations  # PEP 604 unions (X | None) on Python 3.9
+
 import argparse
 import csv
 import json
