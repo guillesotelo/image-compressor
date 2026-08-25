@@ -15,6 +15,11 @@ Start the conversion process by running:
 python3 run_compression_v2.py path/to/source --video-quality 26 --photo-quality 85
 ```
 
+If a re-encode ends up **bigger** than the source (common with photos that are
+already compressed JPEGs), the original is copied over instead and the file is
+reported as `kept original`. Pass `--allow-larger` to keep the bigger re-encode
+anyway.
+
 ### JavaScript engine
 
 Start the conversion process by running: 
